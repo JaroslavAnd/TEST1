@@ -1,53 +1,68 @@
-# Лабораторна робота №1
+# Лабораторні роботи з курсу "Сучасні фреймворки вебпрограмування"
 
 **Дисципліна:** Сучасні фреймворки веб-програмування  
 **Студент:** Патлай Максим (група ВТ-23-1)  
+**Репозиторій:** [https://github.com/JaroslavAnd/TEST1.git](https://github.com/JaroslavAnd/TEST1.git)
 
 ---
 
-## Опис проекту
+## Лабораторна робота №1
 
-У рамках даної лабораторної роботи створено єдиний репозиторій для виконання практичних завдань з використанням фреймворків **Symfony** та **Laravel**.
-
-### Структура проекту:
-
-- `symfony/` — проект на базі **Symfony 6.4**
-  - Реалізовано контролер `TestController` (`src/Controller/TestController.php`)
-  - Маршрут: `/test`
-  - Представлення: `templates/test/index.html.twig`
-- `laravel/` — проект на базі **Laravel 11**
-  - Реалізовано контролер `TestController` (`app/Http/Controllers/TestController.php`)
-  - Маршрут: `/test` (`routes/web.php`)
-  - Метод повертає текстову відповідь `'test'`
+Створено репозиторій для роботи з фреймворками **Symfony 6.4** та **Laravel 11**:
+- Налаштовано середовище (PHP 8.3, Composer, Xdebug v3.3.2).
+- Ініціалізовано проекти в папках `symfony/` та `laravel/`.
+- Реалізовано початкові контролери `TestController` з тестовим методом `/test`.
+- Налаштовано коректне ігнорування прав доступу `git config core.fileMode false`.
 
 ---
 
-## Запуск проектів
+## Лабораторна робота №2: Опис CRUD операцій
 
-### 1. Symfony
+В обох проектах реалізовано CRUD-операції над сутністю `Product` згідно з вимогами.
+
+### 1. Symfony (`symfony/src/Controller/ProductController.php`)
+- **GET** `/products` (`getProducts`) — отримати список усіх товарів (JSON, `HTTP 200 OK`).
+- **GET** `/products/{id}` (`getProductItem`) — отримати товар за ідентифікатором (JSON, `HTTP 200 OK` або `HTTP 404 NOT FOUND`).
+- **POST** `/products` (`createProduct`) — створити новий товар (JSON, `HTTP 201 CREATED`).
+- **PUT / PATCH** `/products/{id}` (`updateProduct`) — оновити існуючий товар (JSON, `HTTP 200 OK` або `HTTP 404 NOT FOUND`).
+- **DELETE** `/products/{id}` (`deleteProduct`) — видалити товар за ідентифікатором (JSON, `HTTP 200 OK` або `HTTP 404 NOT FOUND`).
+
+### 2. Laravel (`laravel/app/Http/Controllers/ProductController.php`)
+Маршрути зареєстровано у `laravel/routes/web.php`:
+- **GET** `/products` — отримати список товарів (`ProductController@getProducts`).
+- **GET** `/products/{id}` — отримати товар за ID (`ProductController@getProductItem`).
+- **POST** `/products` — створення товару (`ProductController@createProduct`).
+- **PUT / PATCH** `/products/{id}` — оновлення товару (`ProductController@updateProduct`).
+- **DELETE** `/products/{id}` — видалення товару (`ProductController@deleteProduct`).
+- У `laravel/bootstrap/app.php` маршрути `/products*` додано у винятки CSRF перевірки для зручного тестування через Postman / curl.
+
+---
+
+## Запуск та перевірка
+
+### Symfony
 ```bash
 cd symfony
-composer install
 symfony server:start
 # або
 php -S 127.0.0.1:8000 -t public
 ```
-Перевірка тестового методу: `http://127.0.0.1:8000/test`
+- Перевірка GET: `http://127.0.0.1:8000/products`
+- Перевірка GET за ID: `http://127.0.0.1:8000/products/1`
 
-### 2. Laravel
+### Laravel
 ```bash
 cd laravel
-composer install
 php artisan serve
 ```
-Перевірка тестового методу: `http://127.0.0.1:8000/test`
+- Перевірка GET: `http://127.0.0.1:8000/products`
+- Перевірка GET за ID: `http://127.0.0.1:8000/products/1`
 
 ---
 
 ## Налаштування Xdebug
-
-Встановлено та активовано Xdebug:
 - Версія: **Xdebug v3.3.2**
-- Режим (`xdebug.mode`): `debug,develop`
-- Клієнт: `127.0.0.1:9003`
-- `start_with_request`: `yes`
+- `xdebug.mode = debug,develop`
+- `xdebug.client_host = 127.0.0.1`
+- `xdebug.client_port = 9003`
+- `xdebug.start_with_request = yes`
