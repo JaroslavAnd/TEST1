@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\CreditType;
 use App\Repository\CreditTypeRepository;
+use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -28,19 +29,28 @@ class CreditTypeController extends AbstractController
     {
         $type = $repository->find($id);
         if (!$type) {
-            return new JsonResponse(['error' => 'Credit type not found'], Response::HTTP_NOT_FOUND);
+            return new JsonResponse(['error' => 'Тип кредиту не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
         return new JsonResponse(['data' => $type->toArray()], Response::HTTP_OK);
     }
 
     #[Route('', name: 'create', methods: [Request::METHOD_POST])]
-    public function create(Request $request, EntityManagerInterface $em): JsonResponse
+    public function create(Request $request, CreditTypeRepository $repository, EntityManagerInterface $em): JsonResponse
     {
         $body = json_decode($request->getContent(), true) ?? [];
 
         if (empty($body['name']) || !isset($body['interestRate']) || !isset($body['minAmount']) || !isset($body['maxAmount']) || empty($body['termMonths'])) {
-            return new JsonResponse(['error' => 'name, interestRate, minAmount, maxAmount, and termMonths are required'], Response::HTTP_BAD_REQUEST);
+            return new JsonResponse([
+                'error' => 'Поля name, interestRate, minAmount, maxAmount та termMonths є обов\'язковими'
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        if ($repository->findOneBy(['name' => $body['name']])) {
+            return new JsonResponse([
+                'error' => 'Тип кредиту з такою назвою вже існує',
+                'errors' => ['name' => 'Поле name має бути унікальним']
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         $type = new CreditType();
@@ -53,7 +63,10 @@ class CreditTypeController extends AbstractController
         $em->persist($type);
         $em->flush();
 
-        return new JsonResponse(['data' => $type->toArray(), 'message' => 'Credit type created successfully'], Response::HTTP_CREATED);
+        return new JsonResponse([
+            'data' => $type->toArray(),
+            'message' => 'Тип кредиту успішно створено'
+        ], Response::HTTP_CREATED);
     }
 
     #[Route('/{id}', name: 'update', methods: [Request::METHOD_PUT, Request::METHOD_PATCH])]
@@ -61,12 +74,21 @@ class CreditTypeController extends AbstractController
     {
         $type = $repository->find($id);
         if (!$type) {
-            return new JsonResponse(['error' => 'Credit type not found'], Response::HTTP_NOT_FOUND);
+            return new JsonResponse(['error' => 'Тип кредиту не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
         $body = json_decode($request->getContent(), true) ?? [];
 
-        if (isset($body['name'])) $type->setName($body['name']);
+        if (isset($body['name']) && $body['name'] !== $type->getName()) {
+            if ($repository->findOneBy(['name' => $body['name']])) {
+                return new JsonResponse([
+                    'error' => 'Тип кредиту з такою назвою вже існує',
+                    'errors' => ['name' => 'Поле name має бути унікальним']
+                ], Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
+            $type->setName($body['name']);
+        }
+
         if (isset($body['interestRate'])) $type->setInterestRate((string)$body['interestRate']);
         if (isset($body['minAmount'])) $type->setMinAmount((string)$body['minAmount']);
         if (isset($body['maxAmount'])) $type->setMaxAmount((string)$body['maxAmount']);
@@ -74,7 +96,10 @@ class CreditTypeController extends AbstractController
 
         $em->flush();
 
-        return new JsonResponse(['data' => $type->toArray(), 'message' => 'Credit type updated successfully'], Response::HTTP_OK);
+        return new JsonResponse([
+            'data' => $type->toArray(),
+            'message' => 'Тип кредиту успішно оновлено'
+        ], Response::HTTP_OK);
     }
 
     #[Route('/{id}', name: 'delete', methods: [Request::METHOD_DELETE])]
@@ -82,12 +107,25 @@ class CreditTypeController extends AbstractController
     {
         $type = $repository->find($id);
         if (!$type) {
-            return new JsonResponse(['error' => 'Credit type not found'], Response::HTTP_NOT_FOUND);
+            return new JsonResponse(['error' => 'Тип кредиту не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
-        $em->remove($type);
-        $em->flush();
+        // Перевірка на наявність кредитів даного типу перед видаленням
+        if ($type->getCredits()->count() > 0) {
+            return new JsonResponse([
+                'error' => 'Неможливо видалити тип кредиту, оскільки існують оформлені кредити цього типу'
+            ], Response::HTTP_CONFLICT);
+        }
 
-        return new JsonResponse(['message' => 'Credit type deleted successfully'], Response::HTTP_OK);
+        try {
+            $em->remove($type);
+            $em->flush();
+        } catch (ForeignKeyConstraintViolationException $e) {
+            return new JsonResponse([
+                'error' => 'Неможливо видалити тип кредиту через обмеження зовнішнього ключа'
+            ], Response::HTTP_CONFLICT);
+        }
+
+        return new JsonResponse(['message' => 'Тип кредиту успішно видалено'], Response::HTTP_OK);
     }
 }

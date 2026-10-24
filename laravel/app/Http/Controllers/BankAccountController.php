@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\BankAccount;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -25,7 +26,7 @@ class BankAccountController extends Controller
         $account = BankAccount::with(['client', 'credits'])->find($id);
 
         if (!$account) {
-            return response()->json(['error' => 'Bank account not found'], Response::HTTP_NOT_FOUND);
+            return response()->json(['error' => 'Банківський рахунок не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
         return response()->json(['data' => $account], Response::HTTP_OK);
@@ -45,7 +46,7 @@ class BankAccountController extends Controller
 
         return response()->json([
             'data' => $account->load('client'),
-            'message' => 'Bank account created successfully',
+            'message' => 'Банківський рахунок успішно створено',
         ], Response::HTTP_CREATED);
     }
 
@@ -54,7 +55,7 @@ class BankAccountController extends Controller
         $account = BankAccount::find($id);
 
         if (!$account) {
-            return response()->json(['error' => 'Bank account not found'], Response::HTTP_NOT_FOUND);
+            return response()->json(['error' => 'Банківський рахунок не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
         $validated = $request->validate([
@@ -68,7 +69,7 @@ class BankAccountController extends Controller
 
         return response()->json([
             'data' => $account->load('client'),
-            'message' => 'Bank account updated successfully',
+            'message' => 'Банківський рахунок успішно оновлено',
         ], Response::HTTP_OK);
     }
 
@@ -77,11 +78,24 @@ class BankAccountController extends Controller
         $account = BankAccount::find($id);
 
         if (!$account) {
-            return response()->json(['error' => 'Bank account not found'], Response::HTTP_NOT_FOUND);
+            return response()->json(['error' => 'Банківський рахунок не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
-        $account->delete();
+        // Захист від видалення рахунку, прив'язаного до кредиту (HTTP 409 Conflict замість SQL 500)
+        if ($account->credits()->exists()) {
+            return response()->json([
+                'error' => 'Неможливо видалити банківський рахунок, оскільки до нього прив\'язані оформлені кредити'
+            ], Response::HTTP_CONFLICT);
+        }
 
-        return response()->json(['message' => 'Bank account deleted successfully'], Response::HTTP_OK);
+        try {
+            $account->delete();
+        } catch (QueryException $e) {
+            return response()->json([
+                'error' => 'Неможливо видалити банківський рахунок через обмеження зовнішнього ключа'
+            ], Response::HTTP_CONFLICT);
+        }
+
+        return response()->json(['message' => 'Банківський рахунок успішно видалено'], Response::HTTP_OK);
     }
 }

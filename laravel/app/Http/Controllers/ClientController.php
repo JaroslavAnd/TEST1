@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Client;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -21,7 +22,7 @@ class ClientController extends Controller
         $client = Client::with(['bankAccounts', 'credits'])->find($id);
 
         if (!$client) {
-            return response()->json(['error' => 'Client not found'], Response::HTTP_NOT_FOUND);
+            return response()->json(['error' => 'Клієнта не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
         return response()->json(['data' => $client], Response::HTTP_OK);
@@ -41,7 +42,7 @@ class ClientController extends Controller
 
         return response()->json([
             'data' => $client,
-            'message' => 'Client created successfully',
+            'message' => 'Клієнта успішно створено',
         ], Response::HTTP_CREATED);
     }
 
@@ -50,7 +51,7 @@ class ClientController extends Controller
         $client = Client::find($id);
 
         if (!$client) {
-            return response()->json(['error' => 'Client not found'], Response::HTTP_NOT_FOUND);
+            return response()->json(['error' => 'Клієнта не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
         $validated = $request->validate([
@@ -65,7 +66,7 @@ class ClientController extends Controller
 
         return response()->json([
             'data' => $client,
-            'message' => 'Client updated successfully',
+            'message' => 'Дані клієнта успішно оновлено',
         ], Response::HTTP_OK);
     }
 
@@ -74,11 +75,17 @@ class ClientController extends Controller
         $client = Client::find($id);
 
         if (!$client) {
-            return response()->json(['error' => 'Client not found'], Response::HTTP_NOT_FOUND);
+            return response()->json(['error' => 'Клієнта не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
-        $client->delete();
+        try {
+            $client->delete();
+        } catch (QueryException $e) {
+            return response()->json([
+                'error' => 'Неможливо видалити клієнта через обмеження зовнішнього ключа в базі даних'
+            ], Response::HTTP_CONFLICT);
+        }
 
-        return response()->json(['message' => 'Client deleted successfully'], Response::HTTP_OK);
+        return response()->json(['message' => 'Клієнта успішно видалено'], Response::HTTP_OK);
     }
 }
