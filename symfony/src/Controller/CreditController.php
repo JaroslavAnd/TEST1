@@ -7,6 +7,8 @@ use App\Repository\BankAccountRepository;
 use App\Repository\ClientRepository;
 use App\Repository\CreditRepository;
 use App\Repository\CreditTypeRepository;
+use App\Service\PaginationService;
+use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -18,18 +20,12 @@ use Symfony\Component\Routing\Attribute\Route;
 class CreditController extends AbstractController
 {
     #[Route('', name: 'list', methods: [Request::METHOD_GET])]
-    public function list(Request $request, CreditRepository $repository): JsonResponse
+    public function list(Request $request, CreditRepository $repository, PaginationService $paginationService): JsonResponse
     {
-        $clientId = $request->query->get('clientId');
-        if ($clientId) {
-            $credits = $repository->findBy(['client' => $clientId]);
-        } else {
-            $credits = $repository->findAll();
-        }
+        $qb = $repository->getFilteredQueryBuilder($request->query->all());
+        $result = $paginationService->paginate($qb, $request);
 
-        $data = array_map(fn(Credit $credit) => $credit->toArray(), $credits);
-
-        return new JsonResponse(['data' => $data], Response::HTTP_OK);
+        return new JsonResponse($result, Response::HTTP_OK);
     }
 
     #[Route('/{id}', name: 'show', methods: [Request::METHOD_GET])]
@@ -37,7 +33,7 @@ class CreditController extends AbstractController
     {
         $credit = $repository->find($id);
         if (!$credit) {
-            return new JsonResponse(['error' => 'Credit not found'], Response::HTTP_NOT_FOUND);
+            return new JsonResponse(['error' => 'Кредит не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
         return new JsonResponse(['data' => $credit->toArray()], Response::HTTP_OK);
@@ -54,22 +50,24 @@ class CreditController extends AbstractController
         $body = json_decode($request->getContent(), true) ?? [];
 
         if (empty($body['clientId']) || empty($body['bankAccountId']) || empty($body['creditTypeId']) || empty($body['amount'])) {
-            return new JsonResponse(['error' => 'clientId, bankAccountId, creditTypeId, and amount are required'], Response::HTTP_BAD_REQUEST);
+            return new JsonResponse([
+                'error' => 'Поля clientId, bankAccountId, creditTypeId та amount є обов\'язковими'
+            ], Response::HTTP_BAD_REQUEST);
         }
 
         $client = $clientRepo->find($body['clientId']);
         if (!$client) {
-            return new JsonResponse(['error' => 'Client not found'], Response::HTTP_NOT_FOUND);
+            return new JsonResponse(['error' => 'Клієнта не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
         $bankAccount = $bankAccountRepo->find($body['bankAccountId']);
         if (!$bankAccount) {
-            return new JsonResponse(['error' => 'Bank account not found'], Response::HTTP_NOT_FOUND);
+            return new JsonResponse(['error' => 'Банківський рахунок не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
         $creditType = $creditTypeRepo->find($body['creditTypeId']);
         if (!$creditType) {
-            return new JsonResponse(['error' => 'Credit type not found'], Response::HTTP_NOT_FOUND);
+            return new JsonResponse(['error' => 'Тип кредиту не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
         $amount = (string)$body['amount'];
@@ -91,7 +89,10 @@ class CreditController extends AbstractController
         $em->persist($credit);
         $em->flush();
 
-        return new JsonResponse(['data' => $credit->toArray(), 'message' => 'Credit created successfully'], Response::HTTP_CREATED);
+        return new JsonResponse([
+            'data' => $credit->toArray(),
+            'message' => 'Кредит успішно оформлено'
+        ], Response::HTTP_CREATED);
     }
 
     #[Route('/{id}', name: 'update', methods: [Request::METHOD_PUT, Request::METHOD_PATCH])]
@@ -99,7 +100,7 @@ class CreditController extends AbstractController
     {
         $credit = $repository->find($id);
         if (!$credit) {
-            return new JsonResponse(['error' => 'Credit not found'], Response::HTTP_NOT_FOUND);
+            return new JsonResponse(['error' => 'Кредит не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
         $body = json_decode($request->getContent(), true) ?? [];
@@ -110,7 +111,10 @@ class CreditController extends AbstractController
 
         $em->flush();
 
-        return new JsonResponse(['data' => $credit->toArray(), 'message' => 'Credit updated successfully'], Response::HTTP_OK);
+        return new JsonResponse([
+            'data' => $credit->toArray(),
+            'message' => 'Дані кредиту успішно оновлено'
+        ], Response::HTTP_OK);
     }
 
     #[Route('/{id}', name: 'delete', methods: [Request::METHOD_DELETE])]
@@ -118,12 +122,18 @@ class CreditController extends AbstractController
     {
         $credit = $repository->find($id);
         if (!$credit) {
-            return new JsonResponse(['error' => 'Credit not found'], Response::HTTP_NOT_FOUND);
+            return new JsonResponse(['error' => 'Кредит не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
-        $em->remove($credit);
-        $em->flush();
+        try {
+            $em->remove($credit);
+            $em->flush();
+        } catch (ForeignKeyConstraintViolationException $e) {
+            return new JsonResponse([
+                'error' => 'Неможливо видалити кредит через обмеження зовнішнього ключа'
+            ], Response::HTTP_CONFLICT);
+        }
 
-        return new JsonResponse(['message' => 'Credit deleted successfully'], Response::HTTP_OK);
+        return new JsonResponse(['message' => 'Кредит успішно видалено'], Response::HTTP_OK);
     }
 }

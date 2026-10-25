@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\CreditType;
 use App\Repository\CreditTypeRepository;
+use App\Service\PaginationService;
 use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -16,12 +17,12 @@ use Symfony\Component\Routing\Attribute\Route;
 class CreditTypeController extends AbstractController
 {
     #[Route('', name: 'list', methods: [Request::METHOD_GET])]
-    public function list(CreditTypeRepository $repository): JsonResponse
+    public function list(Request $request, CreditTypeRepository $repository, PaginationService $paginationService): JsonResponse
     {
-        $types = $repository->findAll();
-        $data = array_map(fn(CreditType $type) => $type->toArray(), $types);
+        $qb = $repository->getFilteredQueryBuilder($request->query->all());
+        $result = $paginationService->paginate($qb, $request);
 
-        return new JsonResponse(['data' => $data], Response::HTTP_OK);
+        return new JsonResponse($result, Response::HTTP_OK);
     }
 
     #[Route('/{id}', name: 'show', methods: [Request::METHOD_GET])]

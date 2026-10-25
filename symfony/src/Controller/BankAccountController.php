@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Entity\BankAccount;
 use App\Repository\BankAccountRepository;
 use App\Repository\ClientRepository;
+use App\Service\PaginationService;
 use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -17,18 +18,12 @@ use Symfony\Component\Routing\Attribute\Route;
 class BankAccountController extends AbstractController
 {
     #[Route('', name: 'list', methods: [Request::METHOD_GET])]
-    public function list(Request $request, BankAccountRepository $repository): JsonResponse
+    public function list(Request $request, BankAccountRepository $repository, PaginationService $paginationService): JsonResponse
     {
-        $clientId = $request->query->get('clientId');
-        if ($clientId) {
-            $accounts = $repository->findBy(['client' => $clientId]);
-        } else {
-            $accounts = $repository->findAll();
-        }
+        $qb = $repository->getFilteredQueryBuilder($request->query->all());
+        $result = $paginationService->paginate($qb, $request);
 
-        $data = array_map(fn(BankAccount $acc) => $acc->toArray(), $accounts);
-
-        return new JsonResponse(['data' => $data], Response::HTTP_OK);
+        return new JsonResponse($result, Response::HTTP_OK);
     }
 
     #[Route('/{id}', name: 'show', methods: [Request::METHOD_GET])]

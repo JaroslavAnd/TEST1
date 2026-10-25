@@ -4,22 +4,21 @@ namespace App\Http\Controllers;
 
 use App\Models\Credit;
 use App\Models\Payment;
+use App\Services\PaginationService;
 use Carbon\Carbon;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 class PaymentController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, PaginationService $paginationService): JsonResponse
     {
-        $query = Payment::with('credit');
+        $query = Payment::filter($request->query())->with('credit');
+        $result = $paginationService->paginate($query, $request);
 
-        if ($request->has('credit_id')) {
-            $query->where('credit_id', $request->query('credit_id'));
-        }
-
-        return response()->json(['data' => $query->get()], Response::HTTP_OK);
+        return response()->json($result, Response::HTTP_OK);
     }
 
     public function show(string|int $id): JsonResponse
@@ -27,7 +26,7 @@ class PaymentController extends Controller
         $payment = Payment::with('credit')->find($id);
 
         if (!$payment) {
-            return response()->json(['error' => 'Payment not found'], Response::HTTP_NOT_FOUND);
+            return response()->json(['error' => 'Платіж не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
         return response()->json(['data' => $payment], Response::HTTP_OK);
@@ -53,7 +52,7 @@ class PaymentController extends Controller
             'status' => $validated['status'] ?? 'completed',
         ]);
 
-        // Reduce remaining amount on the credit
+        // Зменшення залишку заборгованості за кредитом
         $newRemaining = max(0, (float)$credit->remaining_amount - (float)$validated['amount']);
         $credit->remaining_amount = $newRemaining;
         if ($newRemaining == 0) {
@@ -63,7 +62,7 @@ class PaymentController extends Controller
 
         return response()->json([
             'data' => $payment->load('credit'),
-            'message' => 'Payment recorded successfully',
+            'message' => 'Платіж успішно проведено',
         ], Response::HTTP_CREATED);
     }
 
@@ -72,7 +71,7 @@ class PaymentController extends Controller
         $payment = Payment::find($id);
 
         if (!$payment) {
-            return response()->json(['error' => 'Payment not found'], Response::HTTP_NOT_FOUND);
+            return response()->json(['error' => 'Платіж не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
         $validated = $request->validate([
@@ -85,7 +84,7 @@ class PaymentController extends Controller
 
         return response()->json([
             'data' => $payment->load('credit'),
-            'message' => 'Payment updated successfully',
+            'message' => 'Дані платежу успішно оновлено',
         ], Response::HTTP_OK);
     }
 
@@ -94,11 +93,17 @@ class PaymentController extends Controller
         $payment = Payment::find($id);
 
         if (!$payment) {
-            return response()->json(['error' => 'Payment not found'], Response::HTTP_NOT_FOUND);
+            return response()->json(['error' => 'Платіж не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
-        $payment->delete();
+        try {
+            $payment->delete();
+        } catch (QueryException $e) {
+            return response()->json([
+                'error' => 'Неможливо видалити платіж через обмеження зовнішнього ключа'
+            ], Response::HTTP_CONFLICT);
+        }
 
-        return response()->json(['message' => 'Payment deleted successfully'], Response::HTTP_OK);
+        return response()->json(['message' => 'Платіж успішно видалено'], Response::HTTP_OK);
     }
 }

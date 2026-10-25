@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Client;
+use App\Services\PaginationService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -10,11 +11,12 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ClientController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request, PaginationService $paginationService): JsonResponse
     {
-        $clients = Client::with(['bankAccounts', 'credits'])->get();
+        $query = Client::filter($request->query())->with(['bankAccounts', 'credits']);
+        $result = $paginationService->paginate($query, $request);
 
-        return response()->json(['data' => $clients], Response::HTTP_OK);
+        return response()->json($result, Response::HTTP_OK);
     }
 
     public function show(string|int $id): JsonResponse

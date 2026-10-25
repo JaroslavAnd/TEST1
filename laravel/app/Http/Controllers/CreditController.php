@@ -4,26 +4,21 @@ namespace App\Http\Controllers;
 
 use App\Models\Credit;
 use App\Models\CreditType;
+use App\Services\PaginationService;
 use Carbon\Carbon;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 class CreditController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, PaginationService $paginationService): JsonResponse
     {
-        $query = Credit::with(['client', 'bankAccount', 'creditType']);
+        $query = Credit::filter($request->query())->with(['client', 'bankAccount', 'creditType']);
+        $result = $paginationService->paginate($query, $request);
 
-        if ($request->has('client_id')) {
-            $query->where('client_id', $request->query('client_id'));
-        }
-
-        if ($request->has('status')) {
-            $query->where('status', $request->query('status'));
-        }
-
-        return response()->json(['data' => $query->get()], Response::HTTP_OK);
+        return response()->json($result, Response::HTTP_OK);
     }
 
     public function show(string|int $id): JsonResponse
@@ -31,7 +26,7 @@ class CreditController extends Controller
         $credit = Credit::with(['client', 'bankAccount', 'creditType', 'payments'])->find($id);
 
         if (!$credit) {
-            return response()->json(['error' => 'Credit not found'], Response::HTTP_NOT_FOUND);
+            return response()->json(['error' => 'Кредит не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
         return response()->json(['data' => $credit], Response::HTTP_OK);
@@ -70,7 +65,7 @@ class CreditController extends Controller
 
         return response()->json([
             'data' => $credit->load(['client', 'bankAccount', 'creditType']),
-            'message' => 'Credit created successfully',
+            'message' => 'Кредит успішно оформлено',
         ], Response::HTTP_CREATED);
     }
 
@@ -79,7 +74,7 @@ class CreditController extends Controller
         $credit = Credit::find($id);
 
         if (!$credit) {
-            return response()->json(['error' => 'Credit not found'], Response::HTTP_NOT_FOUND);
+            return response()->json(['error' => 'Кредит не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
         $validated = $request->validate([
@@ -93,7 +88,7 @@ class CreditController extends Controller
 
         return response()->json([
             'data' => $credit->load(['client', 'bankAccount', 'creditType']),
-            'message' => 'Credit updated successfully',
+            'message' => 'Дані кредиту успішно оновлено',
         ], Response::HTTP_OK);
     }
 
@@ -102,11 +97,17 @@ class CreditController extends Controller
         $credit = Credit::find($id);
 
         if (!$credit) {
-            return response()->json(['error' => 'Credit not found'], Response::HTTP_NOT_FOUND);
+            return response()->json(['error' => 'Кредит не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
-        $credit->delete();
+        try {
+            $credit->delete();
+        } catch (QueryException $e) {
+            return response()->json([
+                'error' => 'Неможливо видалити кредит через обмеження зовнішнього ключа'
+            ], Response::HTTP_CONFLICT);
+        }
 
-        return response()->json(['message' => 'Credit deleted successfully'], Response::HTTP_OK);
+        return response()->json(['message' => 'Кредит успішно видалено'], Response::HTTP_OK);
     }
 }

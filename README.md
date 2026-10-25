@@ -3,7 +3,8 @@
 **Дисципліна:** Сучасні фреймворки веб-програмування  
 **Студент:** Патлай Максим (група ВТ-23-1)  
 **Репозиторій:** [https://github.com/JaroslavAnd/TEST1.git](https://github.com/JaroslavAnd/TEST1.git)  
-**Гілка Лабораторної №3:** `lab3`
+**Гілка Лабораторної №3:** `lab3`  
+**Гілка Лабораторної №4:** `lab4`
 
 ---
 
@@ -142,6 +143,147 @@ php artisan serve
 - **Програми кредитування:** `GET http://127.0.0.1:8000/api/credit-types`
 - **Кредити:** `GET http://127.0.0.1:8000/api/credits`
 - **Платежі:** `GET http://127.0.0.1:8000/api/payments`
+
+---
+
+## Лабораторна робота №4: Пагінація та фільтрація
+
+Розширено всі 5 ендпоінтів GET-списку в обох фреймворках: додано **пагінацію** та **фільтрацію за кожним полем таблиці**.
+
+### Параметри пагінації (для всіх ендпоінтів)
+
+| Параметр | Псевдонім | Тип | За замовчуванням | Опис |
+|---|---|---|---|---|
+| `page` | — | int | 1 | Номер сторінки |
+| `itemsPerPage` | `per_page`, `limit` | int | 10 | Кількість записів на сторінці |
+
+### Формат відповіді
+
+```json
+{
+  "data": [ /* масив об'єктів */ ],
+  "pagination": {
+    "currentPage": 1,
+    "itemsPerPage": 10,
+    "totalItems": 42,
+    "totalPages": 5,
+    "hasNextPage": true,
+    "hasPreviousPage": false
+  }
+}
+```
+
+---
+
+### Параметри фільтрації по ендпоінтах
+
+#### `GET /api/clients`
+
+| Параметр | Тип | Опис |
+|---|---|---|
+| `id` | int | Точний збіг ID |
+| `firstName` / `first_name` | string | Пошук підрядком (LIKE) |
+| `lastName` / `last_name` | string | Пошук підрядком (LIKE) |
+| `email` | string | Пошук підрядком (LIKE) |
+| `phone` | string | Пошук підрядком (LIKE) |
+| `taxId` / `tax_id` | string | Пошук підрядком (LIKE) |
+| `createdFrom` / `created_from` | date | Дата створення від (включно) |
+| `createdTo` / `created_to` | date | Дата створення до (включно) |
+
+**Приклад:** `GET /api/clients?page=1&itemsPerPage=5&firstName=Іван`
+
+---
+
+#### `GET /api/bank-accounts`
+
+| Параметр | Тип | Опис |
+|---|---|---|
+| `id` | int | Точний збіг ID |
+| `clientId` / `client_id` | int | ID клієнта (точний) |
+| `accountNumber` / `account_number` | string | Пошук підрядком (LIKE) |
+| `currency` | string | Точний збіг валюти (напр. `UAH`) |
+| `status` | string | Точний збіг статусу (`active`/`closed`) |
+| `balance` | float | Точна сума балансу |
+| `minBalance` / `min_balance` | float | Баланс від |
+| `maxBalance` / `max_balance` | float | Баланс до |
+| `createdFrom` / `created_from` | date | Дата створення від |
+| `createdTo` / `created_to` | date | Дата створення до |
+
+**Приклад:** `GET /api/bank-accounts?currency=UAH&status=active&minBalance=1000`
+
+---
+
+#### `GET /api/credit-types`
+
+| Параметр | Тип | Опис |
+|---|---|---|
+| `id` | int | Точний збіг ID |
+| `name` | string | Пошук підрядком (LIKE) |
+| `interestRate` / `interest_rate` | float | Точна процентна ставка |
+| `minInterestRate` / `min_interest_rate` | float | Ставка від |
+| `maxInterestRate` / `max_interest_rate` | float | Ставка до |
+| `minAmount` / `min_amount` | float | Мінімальна сума кредиту від |
+| `maxAmount` / `max_amount` | float | Максимальна сума кредиту до |
+| `termMonths` / `term_months` | int | Строк у місяцях (точний) |
+
+**Приклад:** `GET /api/credit-types?minInterestRate=5&maxInterestRate=15`
+
+---
+
+#### `GET /api/credits`
+
+| Параметр | Тип | Опис |
+|---|---|---|
+| `id` | int | Точний збіг ID |
+| `clientId` / `client_id` | int | ID клієнта (точний) |
+| `bankAccountId` / `bank_account_id` | int | ID рахунку (точний) |
+| `creditTypeId` / `credit_type_id` | int | ID типу кредиту (точний) |
+| `status` | string | Статус (`active`/`closed`/`overdue`) |
+| `amount` | float | Точна сума |
+| `minAmount` / `min_amount` | float | Сума від |
+| `maxAmount` / `max_amount` | float | Сума до |
+| `minRemainingAmount` / `min_remaining_amount` | float | Залишок від |
+| `maxRemainingAmount` / `max_remaining_amount` | float | Залишок до |
+| `startDate` / `start_date` | date | Дата початку від |
+| `endDate` / `end_date` | date | Дата закінчення до |
+| `createdFrom` / `created_from` | date | Дата створення від |
+| `createdTo` / `created_to` | date | Дата створення до |
+
+**Приклад:** `GET /api/credits?status=active&minAmount=10000&clientId=1`
+
+---
+
+#### `GET /api/payments`
+
+| Параметр | Тип | Опис |
+|---|---|---|
+| `id` | int | Точний збіг ID |
+| `creditId` / `credit_id` | int | ID кредиту (точний) |
+| `amount` | float | Точна сума платежу |
+| `minAmount` / `min_amount` | float | Сума від |
+| `maxAmount` / `max_amount` | float | Сума до |
+| `paymentMethod` / `payment_method` | string | Спосіб оплати (`bank_transfer`/`cash`/`card`) |
+| `status` | string | Статус (`pending`/`completed`/`failed`) |
+| `paymentDateFrom` / `payment_date_from` | date | Дата платежу від |
+| `paymentDateTo` / `payment_date_to` | date | Дата платежу до |
+| `createdFrom` / `created_from` | date | Дата створення від |
+| `createdTo` / `created_to` | date | Дата створення до |
+
+**Приклад:** `GET /api/payments?status=completed&paymentMethod=card&page=2&itemsPerPage=20`
+
+---
+
+### Реалізація
+
+**Symfony 6.4:**
+- `symfony/src/Service/PaginationService.php` — загальний пагінатор на Doctrine `Paginator`
+- `symfony/src/Repository/*Repository.php` — методи `getFilteredQueryBuilder(array $filters)` у кожному репозиторії
+- Усі 5 контролерів: метод `list()` передає `$request->query->all()` до репозиторію та пагінатора
+
+**Laravel 11:**
+- `laravel/app/Services/PaginationService.php` — загальний пагінатор на Eloquent `paginate()`
+- `laravel/app/Models/*.php` — `scopeFilter(Builder $query, array $filters)` у кожній моделі
+- Усі 5 контролерів: `Model::filter($request->query())->paginate()`
 
 ---
 

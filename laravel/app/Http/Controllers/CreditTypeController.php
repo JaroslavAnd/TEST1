@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CreditType;
+use App\Services\PaginationService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -10,11 +11,12 @@ use Symfony\Component\HttpFoundation\Response;
 
 class CreditTypeController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request, PaginationService $paginationService): JsonResponse
     {
-        $types = CreditType::all();
+        $query = CreditType::filter($request->query());
+        $result = $paginationService->paginate($query, $request);
 
-        return response()->json(['data' => $types], Response::HTTP_OK);
+        return response()->json($result, Response::HTTP_OK);
     }
 
     public function show(string|int $id): JsonResponse

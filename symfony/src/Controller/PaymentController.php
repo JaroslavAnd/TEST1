@@ -5,6 +5,8 @@ namespace App\Controller;
 use App\Entity\Payment;
 use App\Repository\CreditRepository;
 use App\Repository\PaymentRepository;
+use App\Service\PaginationService;
+use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -16,18 +18,12 @@ use Symfony\Component\Routing\Attribute\Route;
 class PaymentController extends AbstractController
 {
     #[Route('', name: 'list', methods: [Request::METHOD_GET])]
-    public function list(Request $request, PaymentRepository $repository): JsonResponse
+    public function list(Request $request, PaymentRepository $repository, PaginationService $paginationService): JsonResponse
     {
-        $creditId = $request->query->get('creditId');
-        if ($creditId) {
-            $payments = $repository->findBy(['credit' => $creditId]);
-        } else {
-            $payments = $repository->findAll();
-        }
+        $qb = $repository->getFilteredQueryBuilder($request->query->all());
+        $result = $paginationService->paginate($qb, $request);
 
-        $data = array_map(fn(Payment $payment) => $payment->toArray(), $payments);
-
-        return new JsonResponse(['data' => $data], Response::HTTP_OK);
+        return new JsonResponse($result, Response::HTTP_OK);
     }
 
     #[Route('/{id}', name: 'show', methods: [Request::METHOD_GET])]
@@ -35,7 +31,7 @@ class PaymentController extends AbstractController
     {
         $payment = $repository->find($id);
         if (!$payment) {
-            return new JsonResponse(['error' => 'Payment not found'], Response::HTTP_NOT_FOUND);
+            return new JsonResponse(['error' => 'Платіж не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
         return new JsonResponse(['data' => $payment->toArray()], Response::HTTP_OK);
@@ -47,12 +43,14 @@ class PaymentController extends AbstractController
         $body = json_decode($request->getContent(), true) ?? [];
 
         if (empty($body['creditId']) || empty($body['amount'])) {
-            return new JsonResponse(['error' => 'creditId and amount are required'], Response::HTTP_BAD_REQUEST);
+            return new JsonResponse([
+                'error' => 'Поля creditId та amount є обов\'язковими'
+            ], Response::HTTP_BAD_REQUEST);
         }
 
         $credit = $creditRepo->find($body['creditId']);
         if (!$credit) {
-            return new JsonResponse(['error' => 'Credit not found'], Response::HTTP_NOT_FOUND);
+            return new JsonResponse(['error' => 'Кредит не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
         $paymentAmount = (string)$body['amount'];
@@ -64,7 +62,7 @@ class PaymentController extends AbstractController
             ->setStatus($body['status'] ?? 'completed')
             ->setPaymentDate(!empty($body['paymentDate']) ? new \DateTime($body['paymentDate']) : new \DateTime());
 
-        // Update remaining amount on credit
+        // Оновлення залишку боргу по кредиту
         $newRemaining = max(0, (float)$credit->getRemainingAmount() - (float)$paymentAmount);
         $credit->setRemainingAmount((string)$newRemaining);
         if ($newRemaining == 0) {
@@ -74,7 +72,10 @@ class PaymentController extends AbstractController
         $em->persist($payment);
         $em->flush();
 
-        return new JsonResponse(['data' => $payment->toArray(), 'message' => 'Payment recorded successfully'], Response::HTTP_CREATED);
+        return new JsonResponse([
+            'data' => $payment->toArray(),
+            'message' => 'Платіж успішно проведено'
+        ], Response::HTTP_CREATED);
     }
 
     #[Route('/{id}', name: 'update', methods: [Request::METHOD_PUT, Request::METHOD_PATCH])]
@@ -82,7 +83,7 @@ class PaymentController extends AbstractController
     {
         $payment = $repository->find($id);
         if (!$payment) {
-            return new JsonResponse(['error' => 'Payment not found'], Response::HTTP_NOT_FOUND);
+            return new JsonResponse(['error' => 'Платіж не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
         $body = json_decode($request->getContent(), true) ?? [];
@@ -93,7 +94,10 @@ class PaymentController extends AbstractController
 
         $em->flush();
 
-        return new JsonResponse(['data' => $payment->toArray(), 'message' => 'Payment updated successfully'], Response::HTTP_OK);
+        return new JsonResponse([
+            'data' => $payment->toArray(),
+            'message' => 'Дані платежу успішно оновлено'
+        ], Response::HTTP_OK);
     }
 
     #[Route('/{id}', name: 'delete', methods: [Request::METHOD_DELETE])]
@@ -101,12 +105,18 @@ class PaymentController extends AbstractController
     {
         $payment = $repository->find($id);
         if (!$payment) {
-            return new JsonResponse(['error' => 'Payment not found'], Response::HTTP_NOT_FOUND);
+            return new JsonResponse(['error' => 'Платіж не знайдено'], Response::HTTP_NOT_FOUND);
         }
 
-        $em->remove($payment);
-        $em->flush();
+        try {
+            $em->remove($payment);
+            $em->flush();
+        } catch (ForeignKeyConstraintViolationException $e) {
+            return new JsonResponse([
+                'error' => 'Неможливо видалити платіж через обмеження зовнішнього ключа'
+            ], Response::HTTP_CONFLICT);
+        }
 
-        return new JsonResponse(['message' => 'Payment deleted successfully'], Response::HTTP_OK);
+        return new JsonResponse(['message' => 'Платіж успішно видалено'], Response::HTTP_OK);
     }
 }
